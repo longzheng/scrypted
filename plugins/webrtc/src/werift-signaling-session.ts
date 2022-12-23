@@ -20,7 +20,7 @@ export class WeriftSignalingSession implements RTCSignalingSession {
         this.pc.onIceCandidate.subscribe(async candidate => {
             await this.remoteDescription.promise;
 
-            // this.console.log('local candidate', candidate.candidate);
+            this.console.log('local candidate', candidate.candidate, candidate.sdpMid, candidate.sdpMLineIndex);
             sendIceCandidate?.({
                 candidate: candidate.candidate,
                 sdpMid: candidate.sdpMid,
@@ -55,6 +55,7 @@ export class WeriftSignalingSession implements RTCSignalingSession {
     }
 
     async addIceCandidate(candidate: RTCIceCandidateInit) {
+        this.console.log('remote candidate', candidate.candidate, candidate.sdpMid, candidate.sdpMLineIndex);
         await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
     }
 }

@@ -187,7 +187,7 @@ class ArloCameraSpeaker(ScryptedDeviceBase, ScryptedDevice, ScryptedDeviceLogger
                 #    candidate = candidate[len(prefix):]
                 self.logger.info(f"Arlo response candidate: {candidate}")
                 asyncio.get_event_loop().create_task(self.rtc_session.addIceCandidate(
-                    { "candidate": candidate, "sdpMid": "0av", "sdpMLineIndex": 0 }
+                    { "candidate": candidate[2:].strip(), "sdpMid": "0av", "sdpMLineIndex": 0 }
                 ))
             return self.stop_subscriptions
 
