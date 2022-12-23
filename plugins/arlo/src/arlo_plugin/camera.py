@@ -215,8 +215,8 @@ class ArloCameraSpeaker(ScryptedDeviceBase, ScryptedDevice, ScryptedDeviceLogger
             }
 
             async def on_ice_candidate(candidate):
-                self.logger.info(f"Arlo offer candidate: {candidate.candidate}")
-                self.provider.arlo.NotifyPushToTalkCandidate(self.arlo_basestation, self.arlo_device, session_id, candidate.candidate)
+                self.logger.info(f"Arlo offer candidate: {candidate['candidate']}")
+                self.provider.arlo.NotifyPushToTalkCandidate(self.arlo_basestation, self.arlo_device, session_id, candidate['candidate'])
 
             offer = await session.createLocalDescription("offer", self.rtc_setup, on_ice_candidate)
             self.logger.info(f"Arlo offer sdp:\n{offer['sdp']}")

@@ -4,14 +4,14 @@ import { Deferred } from '@scrypted/common/src/deferred';
 import { listenZeroSingleClient } from '@scrypted/common/src/listen-cluster';
 import { createBrowserSignalingSession } from "@scrypted/common/src/rtc-connect";
 import { SettingsMixinDeviceBase, SettingsMixinDeviceOptions } from '@scrypted/common/src/settings-mixin';
-import sdk, { BufferConverter, BufferConvertorOptions, ConnectOptions, DeviceCreator, DeviceCreatorSettings, DeviceProvider, FFmpegInput, HttpRequest, Intercom, MediaObject, MixinProvider, RequestMediaStream, RequestMediaStreamOptions, ResponseMediaStreamOptions, RTCSessionControl, RTCSignalingChannel, RTCSignalingClient, RTCSignalingSession, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, Setting, Settings, SettingValue, VideoCamera } from '@scrypted/sdk';
+import sdk, { BufferConverter, BufferConvertorOptions, ConnectOptions, DeviceCreator, DeviceCreatorSettings, DeviceProvider, FFmpegInput, HttpRequest, Intercom, MediaObject, MixinProvider, RequestMediaStream, RequestMediaStreamOptions, ResponseMediaStreamOptions, RTCAVSignalingSetup, RTCSessionControl, RTCSignalingChannel, RTCSignalingClient, RTCSignalingSendIceCandidate, RTCSignalingSession, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, Setting, Settings, SettingValue, VideoCamera } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import crypto from 'crypto';
 import net from 'net';
 import { DataChannelDebouncer } from './datachannel-debouncer';
 import { createRTCPeerConnectionSink, createTrackForwarder, parseOptions, RTC_BRIDGE_NATIVE_ID, WebRTCConnectionManagement } from "./ffmpeg-to-wrtc";
 import { stunServer, turnServer } from './ice-servers';
-import { waitClosed } from './peerconnection-util';
+import { logConnectionState, waitClosed, waitIceConnected } from './peerconnection-util';
 import { WebRTCCamera } from "./webrtc-camera";
 import { createRTCPeerConnectionSource, getRTCMediaStreamOptions } from './wrtc-to-rtsp';
 import { createZygote } from './zygote';
@@ -72,29 +72,50 @@ class WebRTCMixin extends SettingsMixinDeviceBase<RTCSignalingClient & VideoCame
         if ((this.type === ScryptedDeviceType.Speaker || this.type === ScryptedDeviceType.SmartSpeaker)
             && this.mixinDeviceInterfaces.includes(ScryptedInterface.RTCSignalingChannel)) {
 
-                this.console.log('starting webrtc speaker intercom');
+            this.console.log('starting webrtc speaker intercom');
 
-            const pc = new RTCPeerConnection();
-            const atrack = new MediaStreamTrack({ kind: 'audio' });
-            const audioTransceiver = pc.addTransceiver(atrack);
-            const weriftSignalingSession = new WeriftSignalingSession(this.console, pc);
-            const control = await this.mixinDevice.startRTCSignalingSession(weriftSignalingSession);
-            
-            const forwarder = await createTrackForwarder({
-                timeStart: Date.now(),
-                videoTransceiver: undefined,
-                audioTransceiver,
-                isPrivate: undefined, destinationId: undefined, ipv4: undefined,
-                requestMediaStream: async () => media,
-                sessionSupportsH264High: true,
-                maximumCompatibilityMode: false,
-                transcodeWidth: 1280,
-            });
 
-            waitClosed(pc).finally(() => forwarder.kill());
-            forwarder.killPromise.finally(() => pc.close());
+            class LateBind extends WeriftSignalingSession {
+                createLocalDescription(type: 'offer' | 'answer', setup: RTCAVSignalingSetup, sendIceCandidate: RTCSignalingSendIceCandidate): Promise<RTCSessionDescriptionInit> {
+                    const pc = new RTCPeerConnection(setup.configuration as any);
+                    this.pc = pc;
+                    const atrack = new MediaStreamTrack({kind: 'audio'})
+                    const audioTransceiver = pc.addTransceiver(atrack);
+        
+                    logConnectionState(this.console, pc);
+        
+                    waitIceConnected(pc)
+                        .then(async () => {
+                            try {
+                                const forwarder = await createTrackForwarder({
+                                    timeStart: Date.now(),
+                                    videoTransceiver: undefined,
+                                    audioTransceiver,
+                                    isPrivate: undefined, destinationId: undefined, ipv4: undefined,
+                                    requestMediaStream: async () => media,
+                                    sessionSupportsH264High: true,
+                                    maximumCompatibilityMode: false,
+                                    transcodeWidth: 1280,
+                                });
+        
+                                waitClosed(pc).finally(() => forwarder.kill());
+                                forwarder.killPromise.finally(() => pc.close());
+        
+                                forwarder.killPromise.finally(() => control.endSession());
+                            }
+                            catch (e) {
+                                this.console.error('error connecting intercom', e);
+                                control.endSession();
+                            }
+                        });
 
-            forwarder.killPromise.finally(() => control.endSession());
+                        return super.createLocalDescription(type, setup, sendIceCandidate)
+                }
+            }
+
+
+            const control = await this.mixinDevice.startRTCSignalingSession(new LateBind(this.console, undefined));
+
             return;
         }
 

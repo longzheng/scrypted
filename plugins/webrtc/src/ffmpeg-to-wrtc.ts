@@ -99,6 +99,9 @@ export async function createTrackForwarder(options: {
             audioTransceiver.sender.codec = found;
     }
 
+    if (!audioTransceiver.sender.codec)
+        audioTransceiver.sender.codec = audioTransceiver.codecs[0];
+
     const { name: audioCodecName } = getAudioCodec(audioTransceiver.sender.codec);
     let audioCodecCopy = maximumCompatibilityMode ? undefined : audioCodecName;
 
