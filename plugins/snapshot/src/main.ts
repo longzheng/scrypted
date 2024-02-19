@@ -718,10 +718,10 @@ export class SnapshotPlugin extends AutoenableMixinProvider implements MixinProv
         }
     }
 
-    async canMixin(type: ScryptedDeviceType, interfaces: string[]): Promise<string[]> {
+    async canMixin(type: ScryptedDeviceType, interfaces: string[]) {
         if ((type === ScryptedDeviceType.Camera || type === ScryptedDeviceType.Doorbell) && interfaces.includes(ScryptedInterface.VideoCamera))
             return [ScryptedInterface.Camera, ScryptedInterface.Settings];
-        return undefined;
+        return null;
     }
 
     async getMixin(mixinDevice: any, mixinDeviceInterfaces: ScryptedInterface[], mixinDeviceState: WritableDeviceState): Promise<any> {
