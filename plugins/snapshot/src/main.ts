@@ -3,7 +3,7 @@ import { AuthFetchCredentialState, authHttpFetch } from '@scrypted/common/src/ht
 import { RefreshPromise, TimeoutError, createMapPromiseDebouncer, singletonPromise, timeoutPromise } from "@scrypted/common/src/promise-utils";
 import { SettingsMixinDeviceBase, SettingsMixinDeviceOptions } from "@scrypted/common/src/settings-mixin";
 import sdk, { BufferConverter, Camera, DeviceManifest, DeviceProvider, FFmpegInput, HttpRequest, HttpRequestHandler, HttpResponse, MediaObject, MediaObjectOptions, MixinProvider, RequestMediaStreamOptions, RequestPictureOptions, ResponsePictureOptions, ScryptedDevice, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, Setting, SettingValue, Settings, VideoCamera, WritableDeviceState } from "@scrypted/sdk";
-import { StorageSettings } from "@scrypted/sdk/storage-settings";
+import { StorageSetting, StorageSettings } from "@scrypted/sdk/storage-settings";
 import https from 'https';
 import os from 'os';
 import path from 'path';
@@ -37,19 +37,21 @@ class SnapshotMixin extends SettingsMixinDeviceBase<Camera> implements Camera {
             description: 'The default channel to use for snapshots.',
             defaultValue: 'Camera Default',
             hide: !this.mixinDeviceInterfaces.includes(ScryptedInterface.Camera),
-            onGet: async () => {
+            onGet: async (): Promise<StorageSetting> => {
                 if (!this.mixinDeviceInterfaces.includes(ScryptedInterface.Camera)) {
                     return {
                         hide: true,
                     };
                 }
 
-                let psos: ResponsePictureOptions[];
-                try {
-                    psos = await this.mixinDevice.getPictureOptions();
-                }
-                catch (e) {
-                }
+                const psos = await (async () => {
+                    try {
+                        return await this.mixinDevice.getPictureOptions();
+                    }
+                    catch (e) {
+                        return undefined;
+                    }
+                })()
 
                 if (!psos?.length) {
                     return {
@@ -61,7 +63,7 @@ class SnapshotMixin extends SettingsMixinDeviceBase<Camera> implements Camera {
                     hide: false,
                     choices: [
                         'Camera Default',
-                        ...psos.map(pso => pso.name),
+                        ...psos.map(pso => pso.name ?? pso.id ?? 'Unknown picture option'),
                     ],
                 };
             }
